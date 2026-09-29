@@ -1,0 +1,85 @@
+{
+  "job_name": "DevotedHealthTransactionsprepayjob",
+
+  "source": {
+    "driver": "ODBC Driver 17 for SQL Server",
+    "server": "sql06",
+    "database": "ReportingHubDataSync",
+    "schema": "dbo",
+    "table": "DevotedTransactionprepay",
+    "auth_type": "windows",
+    "encrypt": false,
+    "trust_server_certificate": true,
+    "connection_timeout_seconds": 30
+  },
+
+  "destination": {
+    "driver": "ODBC Driver 17 for SQL Server",
+    "server": "ncsql42",
+    "database": "PI_EDWDDS",
+    "schema": "dbo",
+    "table": "DevotedTransactionprepaytesting",
+    "auth_type": "windows",
+    "encrypt": false,
+    "trust_server_certificate": true,
+    "connection_timeout_seconds": 30
+  },
+
+  "incremental": {
+    "mode": "date",
+    "id_column": "ClientAuditId",
+    "date_column": "ActionDate",
+    "match_columns": ["ClientAuditId", "ActionDate"],
+    "columns": ["*"],
+    "preserve_identity": false,
+    "application_lock_name": "DevotedHealthTransactionsprepaytesting",
+    "catchup_days": 14
+  },
+
+  "cleaning": {
+    "strip_characters": ["'", "\"", "_"],
+    "trim_whitespace": true,
+    "normalize_column_names": false,
+    "lowercase_columns": false,
+    "column_name_style": "original"
+  },
+
+  "performance": {
+    "batch_size": 50000
+  },
+
+  "schedule": {
+    "enabled": false,
+    "run_time": "06:00"
+  },
+
+  "retry": {
+    "max_attempts": 3,
+    "wait_seconds": 30
+  },
+
+  "logging": {
+    "log_folder": "logs",
+    "keep_days": 30
+  },
+
+  "email": {
+    "enabled": false,
+    "smtp_server": "",
+    "smtp_port": 25,
+    "starttls": false,
+    "username": "",
+    "password": "",
+    "from_address": "",
+    "to_addresses": []
+  },
+
+  "_column_name_style_reference": {
+    "original": "ClaimNumber",
+    "lower": "claimnumber",
+    "upper": "CLAIMNUMBER",
+    "firstcap": "Claimnumber",
+    "pascal": "ClaimNumber",
+    "camel": "claimNumber"
+  }
+}
