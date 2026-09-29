@@ -1,0 +1,223 @@
+{
+  "_job_setup_guide": {
+    "_note": "Documentation only - validate.py does NOT read this block. Edit the sections below for each new job.",
+    "run_commands": [
+      "python validate.py --config config.json",
+      "python export.py --config config.json"
+    ],
+    "full_documentation": "See README.md and the module docstring at the top of validate.py",
+    "checklist_new_job": {
+      "1_servers": "Add or update server aliases under 'servers' (driver, server hostname, auth).",
+      "2_log_target": "Set log_server, log_database, log_table where ValidationLog2 rows are written.",
+      "3_clients_block": "One entry per job under 'clients' - this is the main job definition:",
+      "3a_client_id_flow_id": "client_id, flow_id",
+      "3b_connections": "source_server, source_database, destination_server, destination_database",
+      "3c_tables": "source_table, destination_table (used in logs only for custom_query mode)",
+      "3d_fetch_mode": "Set fetch_mode to 'custom_query' when using SQL below",
+      "3e_source_fetch_query": "List columns to validate in SELECT order (after join key + ClientID + AuditId). 3 value columns in query = 3 validations automatically.",
+      "3f_destination_fetch_query": "Same count/order of validation columns as source. Put extra non-validated columns in exclude_from_validation.",
+      "3g_reference_keys": "Join key only (usually ClientAuditId on both sides)",
+      "3h_exclude_from_validation": "Optional - destination/source columns in query but NOT compared (e.g. ClaimLineUID)",
+      "3i_normalization": "type: numeric for money/decimals, text for strings, date for dates",
+      "4_optional_validation_pairs": "Only if source/dest columns cannot be paired by SELECT order - explicit [[source, dest], ...] in clients[]",
+      "5_options_single_pass": "Keep single_pass_custom_query: true for multiple columns on same queries (faster)",
+      "6_identity_fallbacks": "Only if column names differ - update identity.source_column_fallbacks / destination_column_fallbacks"
+    },
+    "usually_leave_unchanged": [
+      "mappings section (not needed - auto-built from fetch queries)",
+      "options.log_granularity (per_key = one log row per audit)",
+      "options.log_matches (false = only log problems)",
+      "queries section (SQL templates for table mode, not custom_query jobs)",
+      "normalization_defaults (job-level override in clients[].normalization)",
+      "validate.py and export.py (Python engine - no edit needed per job)"
+    ],
+    "current_job_example": "MedicalMutual provider NPI / TaxID / OrganizationName / State / FullAddress / City check; client_id = ClientKey (27), flow_id = ClientUID (4); source sql07 (Workflow_medicalmutual), destination ncsql38 (PI_EDWDDS), destination table Reports_ActivityData; join key = ClaimSummaryUID"
+  },
+  "batch_size": 25000,
+  "query_timeout_seconds": 600,
+  "log_table": "dbo.providertaxid",
+  "log_server": "ncsql38",
+  "log_database": "PI_EDWLogs",
+  "options": {
+    "use_nolock": true,
+    "log_matches": false,
+    "log_granularity": "per_key",
+    "log_flush_every": 5000,
+    "single_pass_custom_query": true,
+    "log_preload_progress": true,
+    "check_orphans_in_destination": false,
+    "fix_blanks": true,
+    "fix_mismatches": false,
+    "preload_fetch_size": 20000,
+    "preload_progress_every": 200000,
+    "temp_key_column_type": "NVARCHAR(500)",
+    "warn_on_duplicate_keys": true,
+    "cast_temp_keys_for_join": false
+  },
+  "queries": {
+    "source_key_batch": "SELECT TOP ({batch_size}) {columns} FROM {table} {nolock_hint} {where} ORDER BY {order_by} ASC",
+    "destination_preload": "SELECT {columns} FROM {table} {nolock_hint} {where}",
+    "batch_row_fetch": "SELECT {select_columns} FROM {table} t {nolock_hint} JOIN {temp_table} tmp ON {join_condition}",
+    "destination_update": "UPDATE {table} SET {column} = ? WHERE {where}",
+    "temp_table_create": "CREATE TABLE {temp_table} ({column_defs})",
+    "temp_table_truncate": "TRUNCATE TABLE {temp_table}",
+    "temp_table_drop": "DROP TABLE {temp_table}",
+    "temp_table_insert": "INSERT INTO {temp_table} ({columns}) VALUES ({placeholders})",
+    "exception_report": "SELECT client_id, flow_id, audit_id, client_audit_id, source_table, source_column, destination_table, destination_column, issue_type, value_status, join_key_status, key_value, source_value, destination_value, exception_reason, batch_number, log_time, details FROM {log_table} WHERE run_id = ? AND issue_type NOT IN ({exclude_issue_types}) ORDER BY client_id, flow_id, source_table, source_column"
+  },
+  "identity": {
+    "primary_key_patterns": [
+      "^client_?audit_?id$",
+      "^client_?id$",
+      "^audit_?id$"
+    ],
+    "client_id_patterns": [
+      "^client_?id$",
+      "^client_?key$"
+    ],
+    "flow_id_patterns": [
+      "^flow_?id$"
+    ],
+    "audit_id_patterns": [
+      "^audit_?id$",
+      "^auditid$"
+    ],
+    "client_audit_id_patterns": [
+      "^client_?audit_?id$",
+      "^clientauditid$"
+    ],
+    "source_column_fallbacks": {
+      "client_id": [
+        "ClientID",
+        "ClientId",
+        "client_id",
+        "CLIENTID"
+      ],
+      "audit_id": [
+        "AuditId",
+        "Audit_id",
+        "AuditID",
+        "audit_id",
+        "AUDITID"
+      ],
+      "client_audit_id": [
+        "ClientAuditId",
+        "ClientAuditID"
+      ]
+    },
+    "destination_column_fallbacks": {
+      "client_id": [
+        "ClientID",
+        "ClientId",
+        "client_id",
+        "CLIENTID"
+      ],
+      "audit_id": [
+        "AuditId",
+        "Audit_id",
+        "AuditID",
+        "audit_id",
+        "AUDITID"
+      ],
+      "client_audit_id": [
+        "ClientAuditId",
+        "ClientAuditID"
+      ]
+    }
+  },
+  "normalization_defaults": {
+    "type": "numeric",
+    "trim": true,
+    "collapse_whitespace": true,
+    "case_insensitive": true
+  },
+  "date_formats": {
+    "_note": "// NOT IN USE - enable when comparing date columns",
+    "enabled": false,
+    "formats": [
+      "%Y-%m-%d",
+      "%Y-%m-%d %H:%M:%S",
+      "%m/%d/%Y",
+      "%m/%d/%Y %H:%M:%S",
+      "%d/%m/%Y",
+      "%Y%m%d",
+      "%Y-%m-%dT%H:%M:%S"
+    ]
+  },
+  "_features_not_in_use": {
+    "date_filter": "// NOT IN USE - filter source/destination keys by date column",
+    "fetch_mode_table": "// NOT IN USE - direct table read instead of custom_query",
+    "preload_destination_rows": "// NOT IN USE - only for table fetch mode, not custom_query",
+    "insert_custom_query": "// NOT IN USE - insert/update with custom_query fetch not supported yet",
+    "check_orphans_in_destination": "// NOT IN USE - set options.check_orphans_in_destination true to enable"
+  },
+  "servers": {
+    "sql07": {
+      "driver": "ODBC Driver 17 for SQL Server",
+      "server": "sql07",
+      "auth": "windows"
+    },
+    "ncsql38": {
+      "driver": "ODBC Driver 17 for SQL Server",
+      "server": "ncsql38",
+      "auth": "windows"
+    }
+  },
+  "clients": [
+    {
+      "client_id": "27",
+      "flow_id": "4",
+      "source_server": "sql07",
+      "source_database": "Workflow_medicalmutual",
+      "destination_server": "ncsql38",
+      "destination_database": "PI_EDWDDS",
+      "source_table": "dbo.Audit",
+      "destination_table": "dbo.Reports_ActivityData",
+      "fetch_mode": "custom_query",
+      "source_fetch_query": "SELECT a.ClientAuditId AS clientauditid, cs.ClaimSummaryUID, 27 AS clientkey, cs.BillingProviderNPI, cs.BillingProviderTaxID, cs.ProviderOrginazationName AS ProviderOrganizationName, cs.ProviderState, cs.ProviderFullAddress, cs.ProviderCity FROM Workflow_medicalmutual.dbo.Audit a (NOLOCK) JOIN MedicalMutualAuditClaims..ClaimSummary cs (NOLOCK) ON a.ClaimSummaryUID = cs.ClaimSummaryUID",
+      "destination_fetch_query": "SELECT s.SelectedClaimKey, r.ClaimSummaryUID, r.ClientKey, s.NPINumber, s.ProviderTaxID, s.ProviderOrganizationName, s.ProviderState, s.ProviderFullAddress, s.ProviderCity FROM PI_EDWDDS.dbo.SelectedClaimDim s INNER JOIN PI_EDWDDS.dbo.Reports_ActivityData r ON s.SelectedClaimKey = r.SelectedClaimKey WHERE r.ClientKey = 27 AND (s.ProviderTaxID IS NULL OR s.NPINumber IS NULL OR s.ProviderOrganizationName IS NULL OR s.ProviderFullAddress IS NULL OR s.ProviderState IS NULL OR s.ProviderCity IS NULL);",
+      "reference_keys": [
+        {
+          "name": "claimsummaryuid",
+          "source_column": "ClaimSummaryUID",
+          "destination_column": "ClaimSummaryUID"
+        }
+      ],
+      "validation_pairs": [
+        [
+          "BillingProviderNPI",
+          "NPINumber"
+        ],
+        [
+          "BillingProviderTaxID",
+          "ProviderTaxID"
+        ],
+        [
+          "ProviderOrganizationName",
+          "ProviderOrganizationName"
+        ],
+        [
+          "ProviderState",
+          "ProviderState"
+        ],
+        [
+          "ProviderFullAddress",
+          "ProviderFullAddress"
+        ],
+        [
+          "ProviderCity",
+          "ProviderCity"
+        ]
+      ],
+      "exclude_from_validation": [
+        "clientauditid",
+        "clientkey",
+        "SelectedClaimKey",
+        "ClientKey"
+      ],
+      "normalization": {
+        "type": "text"
+      }
+    }
+  ]
+}
